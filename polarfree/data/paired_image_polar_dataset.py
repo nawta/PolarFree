@@ -59,6 +59,7 @@ class PairedImagePolarDataset(data.Dataset):
                 label = "easy training data" if scene_complexity == 'easy' else "total training data"
                 print(f"{label}: {len(self.paths)}")
         else:
+            print('self.test_scenes',self.test_scenes)
             for scene in self.test_scenes:
                 tmp_paths = sorted(glob.glob(os.path.join(
                     self.lq_folder, 'input', scene, '*_000.png')))
@@ -181,7 +182,6 @@ class PairedImagePolarDataset(data.Dataset):
         # Process images for training (crop and augment)
         if self.opt['phase'] == 'train':
             GT_size = self.opt['gt_size']
-            
             # Create dictionary for all images that need processing
             all_images = {
                 'img0': img0, 'img45': img45, 'img90': img90, 'img135': img135,
