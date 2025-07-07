@@ -13,6 +13,7 @@
     <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-1.12+-ee4c2c.svg" alt="PyTorch Version"></a>
     <a href="https://github.com/mdyao/PolarFree/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
     <a href="https://huggingface.co/datasets/Mingde/PolaRGB"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-blue" alt="Hugging Face Dataset"></a>
+    <a href="https://youtu.be/g-aNjbygiJM"><img src="https://img.shields.io/badge/YouTube-Demo-red.svg" alt="YouTube Demo"></a>
 </p>
 
 🌟 *A Solution and Dataset for Polarization-based Reflection-Free Imaging*  
@@ -22,6 +23,17 @@
 
 *Image source: [ThinkLucid](https://thinklucid.com/tech-briefs/polarization-explained-sony-polarized-sensor/)*  
 
+
+---
+
+
+## 🎥 **Demo Video**
+Watch the demonstration of PolarFree in action:  
+[![PolarFree Demo](https://img.youtube.com/vi/g-aNjbygiJM/0.jpg)](https://youtu.be/g-aNjbygiJM)
+
+Alternatively, you can play the embedded video below:
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/g-aNjbygiJM" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ---
 
