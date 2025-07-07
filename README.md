@@ -31,10 +31,6 @@
 Watch the demonstration of PolarFree in action:  
 [![PolarFree Demo](https://img.youtube.com/vi/g-aNjbygiJM/0.jpg)](https://youtu.be/g-aNjbygiJM)
 
-Alternatively, you can play the embedded video below:
-
-<iframe width="560" height="315" src="https://www.youtube.com/embed/g-aNjbygiJM" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-
 ---
 
 ## 📌 **Highlights**  
