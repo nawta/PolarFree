@@ -74,8 +74,18 @@ PolarFree addresses the challenging task of reflection removal using polarizatio
 ```bash
 git clone https://github.com/mdyao/PolarFree.git
 cd PolarFree
-pip install -r requirements.txt
 ```
+
+## Requirements
+
+Due to the complexity of my development environment, I do not provide a complete `requirements.txt` file.  
+However, the following key dependencies and their versions are provided for reference:
+
+- basicsr == 1.4.2  
+- mmcv == 2.1.0  
+- torch == 2.4.1  
+- torchvision == 0.19.1
+
 
 ### 2. Download the Dataset
 
