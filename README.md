@@ -115,11 +115,12 @@ PolarFree achieves superior performance compared to existing methods:
 If you find this work useful, please cite:
 
     @inproceedings{polarfree2025,
-    title={PolarFree: Polarization-based Reflection-Free Imaging},
-    author={Mingde Yao, Menglu Wang, King-Man Tam, Lingen Li, Tianfan Xue, Jinwei Gu},
-    booktitle={CVPR},
-    year={2025}
+      title   = {PolarFree: Polarization-based Reflection-Free Imaging},
+      author  = {Yao, Mingde and Wang, Menglu and Tam, King-Man and Li, Lingen and Xue, Tianfan and Gu, Jinwei},
+      booktitle = {CVPR},
+      year    = {2025},
     }
+
 
 
 <!--    
