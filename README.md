@@ -89,8 +89,7 @@ However, the following key dependencies and their versions are provided for refe
 
 ### 2. Download the Dataset
 
-You can access the dataset from Hugging Face:  
-👉 [https://huggingface.co/datasets/Mingde/PolaRGB](https://huggingface.co/datasets/Mingde/PolaRGB)
+You can access the dataset from Hugging Face: 👉 [https://huggingface.co/datasets/Mingde/PolaRGB](https://huggingface.co/datasets/Mingde/PolaRGB)
 
 If you want raw images, you can access the raw image on 👉 [https://huggingface.co/datasets/Mingde/PolaRGB_raw](https://huggingface.co/datasets/Mingde/PolaRGB_raw)
 
