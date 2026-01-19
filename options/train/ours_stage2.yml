@@ -9,8 +9,6 @@ manual_seed: 100
 datasets:
   train:
     name: TrainSet
-  train:
-    name: TrainSet
     type: PairedImagePolarDataset
     dataroot_gt: polargb/train
     dataroot_lq: polargb/train

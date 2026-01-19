@@ -120,8 +120,7 @@ class Vgg19(torch.nn.Module):
     def __init__(self, requires_grad=False):
         super(Vgg19, self).__init__()
 
-        self.vgg = models.vgg19(pretrained=False)  # .to(device)  # .cuda()
-        self.vgg.load_state_dict(torch.load('/ailab/user/yaomingde/workspace/ideas/polarization_reflect/data/v2/pretrained_model/vgg19-dcbb9e9d.pth'))
+        self.vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
         self.vgg.eval()
         self.vgg_pretrained_features = self.vgg.features
 

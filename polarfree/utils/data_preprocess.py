@@ -80,9 +80,14 @@ import numpy as np
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from tqdm import tqdm
 
-# Set input and output paths
-datapath = r'/ailab/user/yaomingde/workspace/ideas/polarization_reflect/data/v1/polar_origin'
-savepath = r'/ailab/user/yaomingde/workspace/ideas/polarization_reflect/data/v1/polar_rgb'
+# Set input and output paths (configure these for your environment)
+import argparse
+parser = argparse.ArgumentParser(description='Preprocess polarization images')
+parser.add_argument('--datapath', type=str, required=True, help='Input data path')
+parser.add_argument('--savepath', type=str, required=True, help='Output save path')
+args, _ = parser.parse_known_args()
+datapath = args.datapath
+savepath = args.savepath
 
 def get_rgb(rgb):
     rgb = rgb.astype(np.uint8)
@@ -139,7 +144,7 @@ for img_path in tqdm(imgs):
     # # Save the processed image
     cv2.imwrite(save_img_path000, i0_rgb)
     cv2.imwrite(save_img_path045, i45_rgb)
-    cv2.imwrite(save_img_path090, i45_rgb )
+    cv2.imwrite(save_img_path090, i90_rgb)
     cv2.imwrite(save_img_path135, i135_rgb)
 
 print("Processing complete!")
