@@ -1,0 +1,191 @@
+# PSD Dataset - Stage 2 Training for Specular Highlight Removal
+# Uses pretrained Stage 1 weights + Diffusion model
+# Follows original PolarFree Stage 2 design
+
+name: psd_stage2
+model_type: PolarFree_S2
+scale: 1
+num_gpu: auto
+manual_seed: 100
+
+# Dataset settings
+datasets:
+  train:
+    name: PSD_Train
+    type: PSDDataset
+    dataroot_psd: /data2/PSD_Dataset/PSD_Dataset
+    split: Train
+    use_aligned: true
+    interpolate: true
+    io_backend:
+      type: disk
+    phase: train
+    gt_size: 256
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 2
+    dataset_enlarge_ratio: 10
+
+  val:
+    name: PSD_Val
+    type: PSDDataset
+    dataroot_psd: /data2/PSD_Dataset/PSD_Dataset
+    split: val
+    use_aligned: true
+    interpolate: true
+    io_backend:
+      type: disk
+    phase: val
+
+# Network structures
+network_g:
+  type: Transformer
+  inp_channels: 3
+  out_channels: 3
+  dim: 48
+  num_blocks: [3,4,4,4]
+  num_refinement_blocks: 4
+  heads: [1,2,4,8]
+  ffn_expansion_factor: 2.66
+  bias: False
+  LayerNorm_type: WithBias
+  dual_pixel_task: False
+  embed_dim: 64
+  group: 4
+
+# Latent encoder for polarization features (Stage 1 - frozen)
+# Input: RGB(3) + IrawD(3) + Ichro(3) + Isv(1) + AOLP(1) + DOLP(1) = 12 channels
+network_le:
+  type: latent_encoder_gelu
+  in_chans: 12
+  embed_dim: 64
+  block_num: 6
+  group: 4
+  stage: 1
+  patch_expansion: 0.5
+  channel_expansion: 4
+
+# Latent encoder for diffusion model (Stage 2)
+# Input: RGB(3) + IrawD(3) + Isv/DOLP/AOLP(3) = 9 channels
+network_le_dm:
+  type: latent_encoder_gelu
+  in_chans: 9
+  embed_dim: 64
+  block_num: 6
+  group: 4
+  stage: 2
+  patch_expansion: 0.5
+  channel_expansion: 4
+
+# Denoising network for diffusion
+network_d:
+  type: denoising
+  in_channel: 256  # (embed_dim * 4)
+  out_channel: 256
+  inner_channel: 512
+  block_num: 4
+  group: 4
+  patch_expansion: 0.5
+  channel_expansion: 2
+
+# Diffusion schedule
+diffusion_schedule:
+  apply_ldm: False
+  schedule: linear
+  timesteps: 8
+  linear_start: 0.1
+  linear_end: 0.99
+
+# Paths - Load pretrained Stage 1 weights
+path:
+  pretrain_network_g: ./experiments/psd_stage1/models/net_g_latest.pth
+  param_key_g: params
+  strict_load_g: true
+
+  pretrain_network_le: ./experiments/psd_stage1/models/net_le_latest.pth
+  param_key_g: params
+  strict_load_le: true
+
+  pretrain_network_le_dm: ~
+  param_key_g: params
+  strict_load_le_dm: true
+
+  pretrain_network_d: ~
+  param_key_g: params
+  strict_load_d: true
+
+  resume_state: ~
+
+# Training settings
+train:
+  total_iter: 300000
+  warmup_iter: -1
+  use_grad_clip: True
+
+  scheduler:
+    type: CosineAnnealingRestartCyclicLR
+    periods: [100000, 200000]
+    restart_weights: [1, 1]
+    eta_mins: [0.0002, 0.000001]
+
+  mixing_augs:
+    mixup: false
+    mixup_beta: 1.2
+    use_identity: true
+
+  optim_total:
+    type: AdamW
+    lr: !!float 2e-4
+    weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
+
+  # Losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+  tv_opt:
+    loss_weight: 0.0005
+
+  vgg_opt:
+    loss_weight: 0.02
+
+  pixel_diff_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+  phase_opt:
+    loss_weight: 0.1
+
+  # Specular removal losses
+  specular_sparse_opt:
+    loss_weight: 0.01
+
+  polar_consistency_opt:
+    loss_weight: 0.1
+
+# Validation settings
+val:
+  val_freq: !!float 50000
+  save_img: true
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+
+# Logging
+logger:
+  print_freq: 5000
+  save_checkpoint_freq: !!float 50000
+  use_tb_logger: false
+  wandb:
+    project: ~
+    resume_id: ~
+
+# Distributed training
+dist_params:
+  backend: nccl
+  port: 29500

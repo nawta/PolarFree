@@ -339,15 +339,18 @@ class PolarFree_S1(BaseModel):
         
         if use_pbar:
             pbar.close()
-        
+
         # Process and log metrics
-        if with_metrics:
+        if with_metrics and len(dataloader) > 0:
             for metric in self.metric_results.keys():
                 self.metric_results[metric] /= (idx + 1)
                 # Update the best metric result
                 self._update_best_metric_result(dataset_name, metric, self.metric_results[metric], current_iter)
-            
+
             self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+        elif with_metrics:
+            logger = get_root_logger()
+            logger.warning(f'Validation skipped: empty dataloader for {dataset_name}')
 
     def _save_validation_images(self, img_name, sr_img, current_iter, dataset_name):
         """Save validation output images"""
