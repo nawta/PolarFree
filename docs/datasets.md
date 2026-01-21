@@ -4,13 +4,24 @@
 
 ---
 
+## サーバー別パス
+
+| サーバー | データルート |
+|---------|-------------|
+| oasis | `/data/nishida/` |
+| fleetwood | `/data2/` |
+
+以下のパスは `{DATA_ROOT}` で記載。環境に応じて読み替えてください。
+
+---
+
 ## 1. PSD Dataset (Polarization Specular Dataset)
 
 **用途**: 鏡面反射除去（Specular Highlight Removal）
 
 ### パス
 ```
-/data2/PSD_Dataset/PSD_Dataset/
+{DATA_ROOT}/PSD_Dataset/
 ├── PSD_Train/
 │   ├── aligned/           # アラインされた画像
 │   │   └── group-XXXX-idx-YY.png
@@ -52,7 +63,7 @@
 
 ### パス
 ```
-/data2/PolaRGB/
+{DATA_ROOT}/PolaRGB/
 ├── train/
 │   ├── easy/
 │   └── hard/

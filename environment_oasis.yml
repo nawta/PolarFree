@@ -1,0 +1,30 @@
+name: polarfree
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - absl-py
+      - addict
+      - basicsr==1.4.2
+      - einops
+      - imageio
+      - lmdb
+      - matplotlib
+      - mmcv==2.1.0
+      - mmengine
+      - numpy
+      - opencv-python
+      - pillow
+      - pyyaml
+      - requests
+      - scikit-image
+      - scipy
+      - tensorboard
+      - tqdm
+      - yapf
+      - torch --index-url https://download.pytorch.org/whl/cu128
+      - torchvision --index-url https://download.pytorch.org/whl/cu128
+prefix: /home/naotonishida/miniconda3/envs/polarfree

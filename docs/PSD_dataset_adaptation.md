@@ -86,8 +86,10 @@ IrawS = 2 * Isv                        # Raw specular estimate
 
 ## PSD Dataset Structure
 
+**Note**: データルートはサーバーにより異なる（oasis: `/data/nishida/`, fleetwood: `/data2/`）
+
 ```
-/data2/PSD_Dataset/PSD_Dataset/
+{DATA_ROOT}/PSD_Dataset/
 ├── PSD_Train/
 │   ├── PSD_Train_diffuse/          # Ground truth (361 images)
 │   │   └── filtered-XXXX.png
