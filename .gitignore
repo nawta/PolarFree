@@ -1,3 +1,16 @@
 *.pyc
 test_scenes
 polarfree-huggingface
+
+# Training artifacts
+experiments/
+results/
+
+# Training logs (keep markdown logs, ignore raw logs)
+logs/*.log
+
+# Data symlinks
+polargb
+
+# PDFs and papers
+*.pdf
