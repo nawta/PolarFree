@@ -23,7 +23,7 @@ datasets:
     gt_size: 256
     use_shuffle: true
     num_worker_per_gpu: 4
-    batch_size_per_gpu: 2
+    batch_size_per_gpu: 8
     dataset_enlarge_ratio: 10
 
   val:
