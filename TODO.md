@@ -3,10 +3,9 @@
 ## 完了済み
 
 - [x] サーバー別パス情報をdocs/に追加（oasis: `/data/nishida/`, fleetwood: `/data2/`）
+- [x] oasis環境のセットアップ（environment_oasis.yml作成）
 
 ## 進行中
-
-- [ ] oasis環境のセットアップ（environment_oasis.yml作成）
 
 ## 予定
 
