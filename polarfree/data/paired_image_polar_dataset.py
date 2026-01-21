@@ -73,17 +73,91 @@ class PairedImagePolarDataset(data.Dataset):
         I = 0.5 * (img0 + img45 + img90 + img135) + 1e-4
         Q = img0 - img90
         U = img45 - img135
-        
+
         # Avoid division by zero
         Q[Q == 0] = 0.0001
         I[I == 0] = 0.0001
-        
+
         # Calculate DoLP and AoLP
         DoLP = np.sqrt(Q**2 + U**2) / I
         DoLP[DoLP > 1] = 1
         AoLP = 0.5 * np.arctan2(U, Q)
-        
+
         return AoLP, DoLP
+
+    def calculate_TRS(self, img0, img45, img90, img135):
+        """Calculate TRS (Transmitted Radiance Sinusoid) components.
+
+        Based on the polarization model: I(φ) = Ic + Isv·cos(2(φ-α))
+        - Ic: constant component (diffuse + unpolarized specular)
+        - Isv: varying amplitude (polarized specular component)
+
+        Args:
+            img0, img45, img90, img135: Grayscale polarization images [H, W]
+
+        Returns:
+            Ic: Constant component (grayscale) [H, W]
+            Isv: Varying amplitude (grayscale) [H, W]
+        """
+        # Constant component: average of all polarization angles
+        Ic = (img0 + img45 + img90 + img135) / 2.0
+
+        # Varying amplitude from Stokes parameters
+        # Isv = sqrt(Q^2 + U^2) / 2 where Q = I0 - I90, U = I45 - I135
+        Q = img0 - img90
+        U = img45 - img135
+        Isv = np.sqrt(Q**2 + U**2) / 2.0
+
+        return Ic, Isv
+
+    def calculate_TRS_rgb(self, img0_rgb, img45_rgb, img90_rgb, img135_rgb):
+        """Calculate TRS components for RGB images.
+
+        Args:
+            img0_rgb, img45_rgb, img90_rgb, img135_rgb: RGB polarization images [C, H, W]
+
+        Returns:
+            Ic_rgb: Constant component (RGB) [C, H, W]
+            Isv_rgb: Varying amplitude (RGB) [C, H, W]
+            IrawD_rgb: Raw diffuse estimate (RGB) [C, H, W]
+            IrawS_rgb: Raw specular estimate (RGB) [C, H, W]
+        """
+        # Constant component per channel
+        Ic_rgb = (img0_rgb + img45_rgb + img90_rgb + img135_rgb) / 2.0
+
+        # Varying amplitude per channel
+        Q_rgb = img0_rgb - img90_rgb
+        U_rgb = img45_rgb - img135_rgb
+        Isv_rgb = np.sqrt(Q_rgb**2 + U_rgb**2) / 2.0
+
+        # Raw diffuse estimate: minimum intensity (Ic - Isv)
+        IrawD_rgb = np.maximum(Ic_rgb - Isv_rgb, 0.0)
+
+        # Raw specular estimate: 2 * Isv
+        IrawS_rgb = 2.0 * Isv_rgb
+
+        return Ic_rgb, Isv_rgb, IrawD_rgb, IrawS_rgb
+
+    def calculate_Ichro(self, IrawD_rgb, eps=1e-6):
+        """Calculate polarization chromaticity image.
+
+        Ichro = IrawD / (sum(IrawD) + eps)
+        This provides illumination-independent color information for clustering.
+
+        Args:
+            IrawD_rgb: Raw diffuse estimate [C, H, W]
+            eps: Small constant to avoid division by zero
+
+        Returns:
+            Ichro: Polarization chromaticity image [C, H, W]
+        """
+        # Sum across color channels
+        IrawD_sum = np.sum(IrawD_rgb, axis=0, keepdims=True)  # [1, H, W]
+
+        # Normalize to get chromaticity
+        Ichro = IrawD_rgb / (IrawD_sum + eps)
+
+        return Ichro
 
     def gen_stokes(self, img0, img45, img90, img135, img_rgb):
         """Generate Stokes parameters and derived quantities"""
@@ -114,7 +188,7 @@ class PairedImagePolarDataset(data.Dataset):
         img_id = lq_path.split('/')[-1].split('_')[0]
         scene_path = lq_path.split('/')[-2]
         tmp_root_path = '/'.join(lq_path.split('/')[:-3])
-        
+
         # Low quality image paths
         lq_paths = {
             'img0': os.path.join(tmp_root_path, 'input', scene_path, f"{img_id}_000.png"),
@@ -123,26 +197,34 @@ class PairedImagePolarDataset(data.Dataset):
             'img135': os.path.join(tmp_root_path, 'input', scene_path, f"{img_id}_135.png"),
             'rgb': os.path.join(tmp_root_path, 'input', scene_path, f"{img_id}_rgb.png")
         }
-        
+
         # Ground truth paths
         gt_root_path = '/'.join(lq_paths['img0'].split('/')[:-3])
         gt_rgb_path = glob.glob(os.path.join(gt_root_path, 'gt', scene_path, '*_rgb.png'))[0]
-        
+
         # Load and preprocess images
         lq_images = {}
         for key, path in lq_paths.items():
-            if 'rgb' in key:
+            if key == 'rgb':
+                # Load RGB image
                 img = cv2.imread(path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) / 255.0
                 img = np.transpose(img, (2, 0, 1))  # HWC to CHW
             else:
-                img = self.bgr2gray(cv2.imread(path))
+                # Load polarization images as both grayscale and RGB
+                img_bgr = cv2.imread(path)
+                # Grayscale version
+                img = self.bgr2gray(img_bgr)
+                # RGB version for TRS processing
+                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB) / 255.0
+                img_rgb = np.transpose(img_rgb, (2, 0, 1))  # HWC to CHW
+                lq_images[key + '_rgb'] = img_rgb
             lq_images[key] = img
-            
+
         gt_rgb = cv2.imread(gt_rgb_path)
         gt_rgb = cv2.cvtColor(gt_rgb, cv2.COLOR_BGR2RGB) / 255.0
         gt_rgb = np.transpose(gt_rgb, (2, 0, 1))  # HWC to CHW
-        
+
         return lq_images, gt_rgb, lq_paths['rgb']
 
     def _random_crop(self, images, gt_rgb, GT_size):
@@ -170,46 +252,73 @@ class PairedImagePolarDataset(data.Dataset):
 
         index = index % len(self.paths)
         lq_path = self.paths[index]
-        
+
         # Load all required images
         lq_images, gt_rgb, lq_rgb_path = self._load_images(lq_path)
-        
-        # Generate Stokes parameters
+
+        # Generate Stokes parameters (grayscale-based)
         img0, img45, img90, img135, aolp, dolp, Ip, Inp = self.gen_stokes(
             lq_images['img0'], lq_images['img45'], lq_images['img90'], lq_images['img135'], lq_images['rgb']
         )
-        
+
+        # Calculate TRS features from RGB polarization images
+        Ic_rgb, Isv_rgb, IrawD_rgb, IrawS_rgb = self.calculate_TRS_rgb(
+            lq_images['img0_rgb'], lq_images['img45_rgb'],
+            lq_images['img90_rgb'], lq_images['img135_rgb']
+        )
+
+        # Calculate polarization chromaticity image
+        Ichro = self.calculate_Ichro(IrawD_rgb)
+
+        # Calculate grayscale Isv for specular intensity map
+        Isv_gray = np.mean(Isv_rgb, axis=0, keepdims=True)  # [1, H, W]
+
         # Process images for training (crop and augment)
         if self.opt['phase'] == 'train':
             GT_size = self.opt['gt_size']
             # Create dictionary for all images that need processing
             all_images = {
                 'img0': img0, 'img45': img45, 'img90': img90, 'img135': img135,
-                'rgb': lq_images['rgb'], 'aolp': aolp, 'dolp': dolp, 'Ip': Ip, 'Inp': Inp
+                'rgb': lq_images['rgb'], 'aolp': aolp, 'dolp': dolp, 'Ip': Ip, 'Inp': Inp,
+                # TRS features
+                'IrawD': IrawD_rgb, 'Ichro': Ichro, 'Isv': Isv_gray,
+                'img0_rgb': lq_images['img0_rgb'], 'img45_rgb': lq_images['img45_rgb'],
+                'img90_rgb': lq_images['img90_rgb'], 'img135_rgb': lq_images['img135_rgb']
             }
-            
+
             # Apply random crop
             all_images, gt_rgb = self._random_crop(all_images, gt_rgb, GT_size)
-            
-            # Apply augmentation
-            augment_list = [all_images['img0'], all_images['img45'], 
-                           all_images['img90'], all_images['img135'], 
-                           all_images['rgb'], gt_rgb, 
-                           all_images['aolp'], all_images['dolp'], 
-                           all_images['Ip'], all_images['Inp']]
-            
+
+            # Apply augmentation (original features)
+            augment_list = [all_images['img0'], all_images['img45'],
+                           all_images['img90'], all_images['img135'],
+                           all_images['rgb'], gt_rgb,
+                           all_images['aolp'], all_images['dolp'],
+                           all_images['Ip'], all_images['Inp'],
+                           # TRS features
+                           all_images['IrawD'], all_images['Ichro'], all_images['Isv'],
+                           all_images['img0_rgb'], all_images['img45_rgb'],
+                           all_images['img90_rgb'], all_images['img135_rgb']]
+
             augmented = augment(augment_list)
-            
+
             # Unpack augmented results
-            img0, img45, img90, img135, lq_rgb, gt_rgb, aolp, dolp, Ip, Inp = augmented
+            (img0, img45, img90, img135, lq_rgb, gt_rgb, aolp, dolp, Ip, Inp,
+             IrawD_rgb, Ichro, Isv_gray,
+             img0_rgb, img45_rgb, img90_rgb, img135_rgb) = augmented
         else:
             lq_rgb = lq_images['rgb']
-        
+            img0_rgb = lq_images['img0_rgb']
+            img45_rgb = lq_images['img45_rgb']
+            img90_rgb = lq_images['img90_rgb']
+            img135_rgb = lq_images['img135_rgb']
+
         # Convert all numpy arrays to PyTorch tensors
         def to_tensor(x):
             return torch.from_numpy(np.ascontiguousarray(x.copy())).float()
-        
+
         result = {
+            # Original polarization features
             'lq_img0': to_tensor(img0),
             'lq_img45': to_tensor(img45),
             'lq_img90': to_tensor(img90),
@@ -219,6 +328,16 @@ class PairedImagePolarDataset(data.Dataset):
             'lq_dolp': to_tensor(dolp),
             'lq_Ip': to_tensor(Ip),
             'lq_Inp': to_tensor(Inp),
+            # TRS-based features for specular highlight removal
+            'lq_IrawD': to_tensor(IrawD_rgb),      # Raw diffuse estimate [3, H, W]
+            'lq_Ichro': to_tensor(Ichro),          # Polarization chromaticity [3, H, W]
+            'lq_Isv': to_tensor(Isv_gray),         # Specular intensity map [1, H, W]
+            # RGB polarization images for potential use
+            'lq_img0_rgb': to_tensor(img0_rgb),
+            'lq_img45_rgb': to_tensor(img45_rgb),
+            'lq_img90_rgb': to_tensor(img90_rgb),
+            'lq_img135_rgb': to_tensor(img135_rgb),
+            # Ground truth
             'gt_img0': to_tensor(gt_rgb),
             'gt_img45': to_tensor(gt_rgb),
             'gt_img90': to_tensor(gt_rgb),
@@ -226,7 +345,7 @@ class PairedImagePolarDataset(data.Dataset):
             'gt_rgb': to_tensor(gt_rgb),
             'lq_path': lq_rgb_path
         }
-        
+
         return result
 
     def __len__(self):
