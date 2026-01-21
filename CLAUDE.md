@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-conda のpolarfree環境下で作業してください．
+conda のpolarfree環境下で作業してください．environment.ymlに大まかな依存関係は書いてあります．
 
 ## 最も重要なルール
 
