@@ -393,6 +393,243 @@ class TVLoss(nn.Module):
 
 #maoyy_stark_1.0
 
+
+############################################################################################################################
+# Loss functions for specular highlight removal
+############################################################################################################################
+
+class SpecularSparseLoss(nn.Module):
+    """Promotes sparsity in specular component using L1 norm.
+
+    The specular component should be sparse - most pixels in a natural image
+    have mostly diffuse reflection with specular highlights concentrated in
+    small regions.
+
+    Args:
+        loss_weight: Weight multiplier for this loss
+    """
+    def __init__(self, loss_weight: float = 1.0) -> None:
+        super().__init__()
+        self.loss_weight = loss_weight
+
+    def forward(self, specular: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            specular: Estimated specular component [B, C, H, W]
+
+        Returns:
+            Sparsity loss (L1 norm)
+        """
+        return self.loss_weight * torch.mean(torch.abs(specular))
+
+
+class PolarConsistencyLoss(nn.Module):
+    """Ensures specular estimates are consistent with polarization measurements.
+
+    The estimated specular component should correlate with Isv (the polarization
+    varying component), since Isv comes 100% from specular reflection.
+
+    Args:
+        loss_weight: Weight multiplier for this loss
+    """
+    def __init__(self, loss_weight: float = 1.0) -> None:
+        super().__init__()
+        self.loss_weight = loss_weight
+
+    def forward(self, specular: torch.Tensor, Isv: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            specular: Estimated specular component [B, C, H, W]
+            Isv: Polarization varying amplitude [B, 1, H, W]
+
+        Returns:
+            MSE loss between specular intensity and Isv
+        """
+        # Convert specular to grayscale for comparison with Isv
+        specular_gray = torch.mean(specular, dim=1, keepdim=True)  # [B, 1, H, W]
+
+        # Normalize both to [0, 1] for fair comparison
+        specular_norm = specular_gray / (specular_gray.max() + 1e-8)
+        Isv_norm = Isv / (Isv.max() + 1e-8)
+
+        return self.loss_weight * F.mse_loss(specular_norm, Isv_norm)
+
+
+class ClusterConsistencyLoss(nn.Module):
+    """Promotes consistency within same-chromaticity pixel clusters.
+
+    Based on Robust PCA insights: pixels with the same chromaticity (illumination-
+    independent color) should have the same diffuse color. This encourages low-rank
+    structure in the diffuse component.
+
+    Args:
+        loss_weight: Weight multiplier for this loss
+        threshold: Chromaticity distance threshold for clustering (default: 0.03)
+        num_samples: Number of pixel pairs to sample per batch (for efficiency)
+    """
+    def __init__(self, loss_weight: float = 1.0, threshold: float = 0.03,
+                 num_samples: int = 1000) -> None:
+        super().__init__()
+        self.loss_weight = loss_weight
+        self.threshold = threshold
+        self.num_samples = num_samples
+
+    def forward(self, diffuse: torch.Tensor, Ichro: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            diffuse: Estimated diffuse component [B, C, H, W]
+            Ichro: Polarization chromaticity image [B, C, H, W]
+
+        Returns:
+            Cluster consistency loss
+        """
+        B, C, H, W = diffuse.shape
+
+        # Flatten spatial dimensions
+        diffuse_flat = diffuse.view(B, C, -1)  # [B, C, H*W]
+        Ichro_flat = Ichro.view(B, C, -1)      # [B, C, H*W]
+
+        total_loss = 0.0
+
+        for b in range(B):
+            # Sample random pixel pairs
+            N = H * W
+            if N < 2:
+                continue
+
+            num_pairs = min(self.num_samples, N * (N - 1) // 2)
+            idx1 = torch.randint(0, N, (num_pairs,), device=diffuse.device)
+            idx2 = torch.randint(0, N, (num_pairs,), device=diffuse.device)
+
+            # Get chromaticity for sampled pixels
+            chro1 = Ichro_flat[b, :, idx1]  # [C, num_pairs]
+            chro2 = Ichro_flat[b, :, idx2]  # [C, num_pairs]
+
+            # Calculate chromaticity distance
+            chro_dist = torch.norm(chro1 - chro2, dim=0)  # [num_pairs]
+
+            # Find pairs within threshold (same cluster)
+            same_cluster = chro_dist < self.threshold
+
+            if same_cluster.sum() > 0:
+                # Get diffuse values for same-cluster pairs
+                diff1 = diffuse_flat[b, :, idx1]  # [C, num_pairs]
+                diff2 = diffuse_flat[b, :, idx2]  # [C, num_pairs]
+
+                # Diffuse colors should be similar for same-chromaticity pixels
+                diff_dist = torch.norm(diff1 - diff2, dim=0)  # [num_pairs]
+                cluster_loss = torch.mean(diff_dist[same_cluster])
+                total_loss += cluster_loss
+
+        return self.loss_weight * total_loss / B
+
+
+class DiffuseSpecularSumLoss(nn.Module):
+    """Ensures diffuse + specular = original observation.
+
+    Physical constraint: the sum of diffuse and specular components
+    should reconstruct the original input image.
+
+    Args:
+        loss_weight: Weight multiplier for this loss
+    """
+    def __init__(self, loss_weight: float = 1.0) -> None:
+        super().__init__()
+        self.loss_weight = loss_weight
+
+    def forward(self, diffuse: torch.Tensor, specular: torch.Tensor,
+                original: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            diffuse: Estimated diffuse component [B, C, H, W]
+            specular: Estimated specular component [B, C, H, W]
+            original: Original input image [B, C, H, W]
+
+        Returns:
+            L1 reconstruction loss
+        """
+        reconstructed = diffuse + specular
+        return self.loss_weight * F.l1_loss(reconstructed, original)
+
+
+class ColorConsistencyLoss(nn.Module):
+    """Promotes consistent hue in the diffuse component.
+
+    After removing specular highlights, the diffuse component should have
+    more uniform hue distribution (lower standard deviation in hue histogram).
+
+    Args:
+        loss_weight: Weight multiplier for this loss
+    """
+    def __init__(self, loss_weight: float = 1.0) -> None:
+        super().__init__()
+        self.loss_weight = loss_weight
+
+    def rgb_to_hsv(self, rgb: torch.Tensor) -> torch.Tensor:
+        """Convert RGB to HSV.
+
+        Args:
+            rgb: RGB tensor [B, 3, H, W] in [0, 1]
+
+        Returns:
+            HSV tensor [B, 3, H, W]
+        """
+        r, g, b = rgb[:, 0], rgb[:, 1], rgb[:, 2]
+
+        max_rgb, _ = rgb.max(dim=1)
+        min_rgb, _ = rgb.min(dim=1)
+        diff = max_rgb - min_rgb + 1e-8
+
+        # Value
+        v = max_rgb
+
+        # Saturation
+        s = diff / (max_rgb + 1e-8)
+
+        # Hue
+        h = torch.zeros_like(max_rgb)
+        mask_r = (max_rgb == r) & (diff > 1e-8)
+        mask_g = (max_rgb == g) & (diff > 1e-8)
+        mask_b = (max_rgb == b) & (diff > 1e-8)
+
+        h[mask_r] = (60 * ((g[mask_r] - b[mask_r]) / diff[mask_r]) % 360)
+        h[mask_g] = (60 * ((b[mask_g] - r[mask_g]) / diff[mask_g]) + 120)
+        h[mask_b] = (60 * ((r[mask_b] - g[mask_b]) / diff[mask_b]) + 240)
+
+        h = h / 360.0  # Normalize to [0, 1]
+
+        return torch.stack([h, s, v], dim=1)
+
+    def forward(self, diffuse: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            diffuse: Estimated diffuse component [B, 3, H, W]
+
+        Returns:
+            Hue variance loss (encourages uniform hue)
+        """
+        # Clamp to valid range
+        diffuse = torch.clamp(diffuse, 0, 1)
+
+        # Convert to HSV
+        hsv = self.rgb_to_hsv(diffuse)
+        hue = hsv[:, 0]  # [B, H, W]
+
+        # Calculate hue variance for each image in batch
+        # Use circular variance for hue (which wraps around)
+        sin_h = torch.sin(2 * np.pi * hue)
+        cos_h = torch.cos(2 * np.pi * hue)
+
+        mean_sin = sin_h.view(sin_h.size(0), -1).mean(dim=1)
+        mean_cos = cos_h.view(cos_h.size(0), -1).mean(dim=1)
+
+        # Circular variance: 1 - R where R is the mean resultant length
+        R = torch.sqrt(mean_sin**2 + mean_cos**2)
+        circular_var = 1 - R
+
+        return self.loss_weight * circular_var.mean()
+
+
 if __name__ == '__main__':
     loss =TVLoss()
     input1 = torch.rand(2,3,64,64).cuda()
