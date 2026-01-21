@@ -62,23 +62,68 @@ PolarFreeモデルをPSD（Polarization Specular Dataset）で学習した結果
 
 ---
 
+## 推論時間
+
+画像サイズ: 512 x 768 (PSD Datasetの標準サイズ)
+
+| Stage | Device | Time (ms) | 備考 |
+|-------|--------|-----------|------|
+| Stage 1 | GPU (H100) | **325** | - |
+| Stage 1 | CPU | 30,872 | ~31秒 |
+| Stage 2 | GPU (H100) | **271** | Diffusion 8 steps |
+| Stage 2 | CPU | 22,397 | ~22秒 |
+
+**注**:
+- GPU: NVIDIA H100 (97GB)
+- CPU: 測定環境のCPU
+- Stage 2はDiffusion推論を含むが、Stage 1より若干速い（ネットワーク構成の違い）
+
+---
+
 ## チェックポイント
 
 ### Stage 1
 ```
 experiments/psd_stage1/models/
-├── net_g_100000.pth      # Generator
-├── net_g_latest.pth
-├── net_le_100000.pth     # Latent Encoder
-└── net_le_latest.pth
+├── net_g_100000.pth      # Generator (72MB)
+├── net_g_latest.pth      # → net_g_100000.pth へのコピー
+├── net_le_100000.pth     # Latent Encoder (2.5MB)
+└── net_le_latest.pth     # → net_le_100000.pth へのコピー
 ```
+
+| ファイル | サイズ | 説明 |
+|----------|--------|------|
+| net_g_*.pth | ~72MB | Transformer Generator |
+| net_le_*.pth | ~2.5MB | Latent Encoder (Stage 1) |
 
 ### Stage 2
 ```
 experiments/psd_stage2/models/
-├── net_g_50000.pth       # Generator (fine-tuned)
-├── net_le_dm_50000.pth   # Latent Encoder for Diffusion
-└── net_d_50000.pth       # Denoising Network
+├── net_g_50000.pth       # Generator (72MB)
+├── net_le_dm_50000.pth   # Latent Encoder for Diffusion (2.4MB)
+└── net_d_50000.pth       # Denoising Network (10MB)
+```
+
+| ファイル | サイズ | 説明 |
+|----------|--------|------|
+| net_g_*.pth | ~72MB | Transformer Generator (Stage 1から継続学習) |
+| net_le_dm_*.pth | ~2.4MB | Latent Encoder (Stage 2用, in_chans=9) |
+| net_d_*.pth | ~10MB | Denoising Network (Diffusion用) |
+
+### 重みの構造
+
+```python
+# 各.pthファイルの構造
+{
+    'params': OrderedDict,  # モデルのstate_dict
+    'epoch': int,           # (training_stateのみ)
+    'iter': int,            # (training_stateのみ)
+    'optimizers': dict,     # (training_stateのみ)
+}
+
+# 使用例
+checkpoint = torch.load('net_g_100000.pth')
+model.load_state_dict(checkpoint['params'])
 ```
 
 ---
